@@ -19,9 +19,8 @@ def hello_world():
     """
     return 'Hello, World!'
 
-# This block ensures the application runs only when the script is executed directly,
-# not when it's imported as a module. This is important for deployment services like Render.
+# This block ensures the application runs only when the script is executed directly.
 if __name__ == '__main__':
-    # The debug=True flag allows for automatic reloading on code changes,
-    # which is helpful during local development. For production, it's often set to False.
-    app.run(debug=True)
+    # Run the app and set its "public street address" to 0.0.0.0,
+    # so that the Render service can connect to it.
+    app.run(host='0.0.0.0', port=5000)
