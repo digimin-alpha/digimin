@@ -127,9 +127,9 @@ def handle_telnyx_webhook():
                     from_=TELNYX_NUMBER,
                     to=from_number,
                     text=ai_response
-                    )
-
                 )
+
+                
                 print(f"Successfully sent response to {from_number}")
             except Exception as e:
                 print(f"Error sending message with Telnyx: {e}")
