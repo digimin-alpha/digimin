@@ -24,6 +24,9 @@ def webhook():
 
         # Log the received message for debugging
         print(f"Received message from {from_number}: {message_text}")
+        
+        # This new log will show you the numbers being used in the API call
+        print(f"Attempting to send reply from {to_number} to {from_number}")
 
         try:
             # Send a reply back using the API key
