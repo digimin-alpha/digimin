@@ -1,6 +1,8 @@
 import os
 import json
 import requests
+import hmac
+import hashlib
 from flask import Flask, request, Response
 from dotenv import load_dotenv
 
@@ -9,8 +11,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set up Telnyx API client using the API key from your environment.
-# os.getenv() retrieves the key from the environment variables, NOT from the code.
-# This is the secure way to handle secrets.
 try:
     import telnyx
     telnyx.api_key = os.getenv("TELNYX_API_KEY")
@@ -22,6 +22,8 @@ except ImportError:
 TELNYX_NUMBER = os.getenv("TELNYX_NUMBER")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
+# Add a new environment variable for the webhook secret.
+TELNYX_WEBHOOK_SECRET = os.getenv("TELNYX_WEBHOOK_SECRET")
 
 # OpenRouter API endpoint.
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -81,12 +83,42 @@ def handle_telnyx_webhook():
     Handles incoming messages from Telnyx via a webhook POST request.
     This function processes the inbound message and sends a response.
     """
+    # 1. Verify the request signature for security.
+    # This prevents unauthorized requests from being processed by ensuring
+    # they are genuinely from Telnyx.
+    expected_signature = request.headers.get("X-Telnyx-Signature")
+    if not expected_signature or not TELNYX_WEBHOOK_SECRET:
+        print("Missing Telnyx-Signature header or webhook secret.")
+        return Response(status=403) # Return Forbidden if signature is missing.
+
+    try:
+        # Get the raw request body. Flask's request.json consumes the stream,
+        # so we need to get the raw data first.
+        request_body = request.get_data()
+
+        # Compute the signature using HMAC-SHA256 with the webhook secret.
+        computed_signature = hmac.new(
+            TELNYX_WEBHOOK_SECRET.encode('utf-8'),
+            request_body,
+            hashlib.sha256
+        ).hexdigest()
+
+        # Compare the computed signature to the one from the header.
+        if not hmac.compare_digest(computed_signature, expected_signature):
+            print("Webhook signature mismatch. Request may be forged.")
+            return Response(status=403) # Return Forbidden.
+
+    except Exception as e:
+        print(f"Error verifying webhook signature: {e}")
+        return Response(status=403)
+
     if not telnyx:
         print("Telnyx SDK is not available. Cannot handle webhook.")
         return Response(status=500)
 
     try:
         # The webhook payload from Telnyx is in the request body.
+        # We can now safely parse the JSON since the signature is verified.
         payload = request.json["data"]["payload"]
         
         # Check if this is an inbound message.
@@ -112,7 +144,7 @@ def handle_telnyx_webhook():
                 print(f"Successfully sent response to {from_number}")
             except Exception as e:
                 print(f"Error sending message with Telnyx: {e}")
-        
+    
     except (KeyError, json.JSONDecodeError) as e:
         print(f"Invalid webhook payload. Error: {e}")
         # Return a 200 OK even on error to prevent Telnyx from retrying.
