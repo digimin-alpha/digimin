@@ -124,9 +124,11 @@ def handle_telnyx_webhook():
             # Send the AI's response back to the user via Telnyx.
             try:
                 telnyx.Message.create(
-                    from_phone_number=TELNYX_NUMBER,
-                    to=[from_number],
+                    from_=TELNYX_NUMBER,
+                    to=from_number,
                     text=ai_response
+                    )
+
                 )
                 print(f"Successfully sent response to {from_number}")
             except Exception as e:
