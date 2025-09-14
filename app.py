@@ -42,10 +42,12 @@ from flask import Flask, request, Response
 from dotenv import load_dotenv
 
 # Load environment variables from the .env file.
+# This works for local development. On Render, the variables are provided directly.
 load_dotenv()
 
 # Set up Telnyx API client using the API key from your environment.
-# Note: You need to install the Telnyx Python SDK with `pip install telnyx`
+# os.getenv() retrieves the key from the environment variables, NOT from the code.
+# This is the secure way to handle secrets.
 try:
     import telnyx
     telnyx.api_key = os.getenv("TELNYX_API_KEY")
@@ -54,9 +56,9 @@ except ImportError:
     telnyx = None
 
 # Load API keys and numbers from environment variables.
-TELNYX_NUMBER = os.getenv("+1-206-316-1632")
-OPENROUTER_API_KEY = os.getenv("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")
-OPENROUTER_MODEL = os.getenv("meta-llama/llama-3.2-3b-instruct:free")
+TELNYX_NUMBER = os.getenv("TELNYX_NUMBER")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
 
 # OpenRouter API endpoint.
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
