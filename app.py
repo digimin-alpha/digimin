@@ -1,10 +1,9 @@
 import os
 import json
 import requests
-import hmac
-import hashlib
-from flask import Flask, request, Response
+from flask import Flask, request, jsonify
 from dotenv import load_dotenv
+from telnyx.webhook import Webhook
 
 # Load environment variables from the .env file.
 # This works for local development. On Render, the variables are provided directly.
@@ -22,8 +21,9 @@ except ImportError:
 TELNYX_NUMBER = os.getenv("TELNYX_NUMBER")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
-# Add a new environment variable for the webhook secret.
-TELNYX_WEBHOOK_SECRET = os.getenv("TELNYX_WEBHOOK_SECRET")
+# This is the new key for webhook verification. You must get it from the Telnyx Portal
+# and set it as an environment variable in Render.
+TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
 
 # OpenRouter API endpoint.
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -77,6 +77,11 @@ def get_openrouter_response(message_content):
         print(f"Error decoding OpenRouter response: {e}")
         return "There was an error processing the AI's response."
 
+# Add a simple root route for basic health checks.
+@app.route('/', methods=['GET'])
+def index():
+    return "Hello! Your Flask app is running. This is not the webhook endpoint."
+
 @app.route('/webhook', methods=['POST'])
 def handle_telnyx_webhook():
     """
@@ -84,50 +89,32 @@ def handle_telnyx_webhook():
     This function processes the inbound message and sends a response.
     """
     # 1. Verify the request signature for security.
-    # This prevents unauthorized requests from being processed by ensuring
-    # they are genuinely from Telnyx.
-    expected_signature = request.headers.get("X-Telnyx-Signature")
-    if not expected_signature or not TELNYX_WEBHOOK_SECRET:
-        print("Missing Telnyx-Signature header or webhook secret.")
-        return Response(status=403) # Return Forbidden if signature is missing.
+    # We now use the built-in Telnyx SDK function for this.
+    telnyx_signature = request.headers.get("telnyx-signature")
 
-    try:
-        # Get the raw request body. Flask's request.json consumes the stream,
-        # so we need to get the raw data first.
-        request_body = request.get_data()
-
-        # Compute the signature using HMAC-SHA256 with the webhook secret.
-        computed_signature = hmac.new(
-            TELNYX_WEBHOOK_SECRET.encode('utf-8'),
-            request_body,
-            hashlib.sha256
-        ).hexdigest()
-
-        # Compare the computed signature to the one from the header.
-        if not hmac.compare_digest(computed_signature, expected_signature):
-            print("Webhook signature mismatch. Request may be forged.")
-            return Response(status=403) # Return Forbidden.
-
-    except Exception as e:
-        print(f"Error verifying webhook signature: {e}")
-        return Response(status=403)
+    if not telnyx_signature or not TELNYX_PUBLIC_KEY:
+        print("Missing Telnyx-Signature header or public key. Skipping verification.")
+    else:
+        try:
+            # This method will raise a ValueError if the signature is invalid.
+            Webhook.verify_signature(request.data, telnyx_signature, TELNYX_PUBLIC_KEY)
+            print("Webhook signature verified successfully.")
+        except ValueError as e:
+            print(f"Webhook signature verification failed: {e}")
+            return jsonify({"status": "error", "message": "Invalid webhook signature"}), 401
 
     if not telnyx:
         print("Telnyx SDK is not available. Cannot handle webhook.")
-        return Response(status=500)
+        return jsonify({"status": "error", "message": "Internal server error"}), 500
 
     try:
         # The webhook payload from Telnyx is in the request body.
-        # We can now safely parse the JSON since the signature is verified.
         payload = request.json["data"]["payload"]
         
         # Check if this is an inbound message.
         if payload.get("direction") == "inbound":
             from_number = payload["from"]["phone_number"]
             message_content = payload["text"]
-            
-            # TODO: To support MMS, you would check for payload.get("media_urls")
-            # and handle the media accordingly before passing the message to the AI.
             
             print(f"Received inbound message from {from_number}: {message_content}")
 
@@ -150,11 +137,10 @@ def handle_telnyx_webhook():
         # Return a 200 OK even on error to prevent Telnyx from retrying.
     
     # Always return a 200 OK to acknowledge receipt of the webhook.
-    return Response(status=200)
+    return jsonify({"status": "success", "message": "Webhook received successfully"}), 200
 
 # This block ensures the application runs only when the script is executed directly.
 if __name__ == '__main__':
-    # Run the app and set its "public street address" to 0.0.0.0,
-    # so that the Render service can connect to it.
-    app.run(host='0.0.0.0', port=5000)
-
+    # Use the PORT environment variable provided by Render.com
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
