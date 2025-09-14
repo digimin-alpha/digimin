@@ -13,8 +13,6 @@ def hello_world():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    # We are removing webhook signature verification to get the app working.
-    # We will need to re-add this later for security.
     event = request.json['data']
 
     if event['event_type'] == 'message.received':
