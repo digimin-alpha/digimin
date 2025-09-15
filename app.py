@@ -17,10 +17,15 @@ def webhook():
     # We are removing webhook signature verification to get the app working.
     # We will need to re-add this later for security.
     
-    # Print the entire JSON payload to debug what Telnyx is sending
-    print(f"Full webhook payload received: {json.dumps(request.json, indent=2)}")
+    # Print the raw request headers and data to debug what Telnyx is sending
+    print("--- Headers ---")
+    print(request.headers)
+    print("--- Raw Data ---")
+    print(request.data)
+    print("----------------")
 
     try:
+        # We will still try to process the JSON if it exists
         event = request.json['data']
 
         if event['event_type'] == 'message.received':
@@ -41,6 +46,9 @@ def webhook():
 
     except KeyError as e:
         print(f"Error parsing webhook payload: Missing key {e}")
+    except Exception as e:
+        # Catch any other parsing errors, such as non-JSON data
+        print(f"General error parsing webhook payload: {e}")
 
     return '', 200
 
