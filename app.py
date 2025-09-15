@@ -22,12 +22,16 @@ def webhook():
         to_number = event['payload']['to'][0]['phone_number']
         message_text = event['payload']['text']
 
-        # Send a reply back using the API key
-        telnyx.Message.create(
-            to=[from_number],
-            from_=to_number,
-            text=f'Hello! I received your message: "{message_text}". Thank you for reaching out!'
-        )
+        try:
+            # Send a reply back using the API key
+            telnyx.Message.create(
+                to=[from_number],
+                from_=to_number,
+                text=f'Hello! I received your message: "{message_text}". Thank you for reaching out!'
+            )
+        except Exception as e:
+            # This will print any errors from the Telnyx API to your Render logs.
+            print(f"Error sending message: {e}")
 
     return '', 200
 
