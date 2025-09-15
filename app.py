@@ -17,6 +17,9 @@ def webhook():
     # We will need to re-add this later for security.
     event = request.json['data']
 
+    # Print the event type to debug what Telnyx is sending
+    print(f"Event type received: {event['event_type']}")
+
     if event['event_type'] == 'message.received':
         from_number = event['payload']['from']['phone_number']
         to_number = event['payload']['to'][0]['phone_number']
